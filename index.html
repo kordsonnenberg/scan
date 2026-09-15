@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>United Leather - Factory Scan</title>
+<style>
+  :root { color-scheme: light; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #f4f4f2; color: #1b1b1b;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px calc(16px + env(safe-area-inset-right)) 24px calc(16px + env(safe-area-inset-left));
+    box-sizing: border-box; text-align: center;
+  }
+  main { width: 100%; max-width: 420px; }
+  .badge {
+    width: 128px; height: 128px; border-radius: 50%; margin: 0 auto 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 72px; line-height: 1; color: #fff;
+    background: #9a9a9a; transition: background .2s;
+  }
+  .badge.sending { background: #9a9a9a; animation: pulse 1s infinite; }
+  .badge.ok      { background: #1e8e3e; }
+  .badge.err     { background: #c5221f; }
+  @keyframes pulse { 50% { opacity: .55; } }
+  h1 { font-size: 30px; margin: 0 0 8px; font-weight: 800; letter-spacing: .01em; }
+  .label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 22px; font-weight: 700;
+           background: #fff; border: 2px solid #ddd; border-radius: 10px; padding: 12px 14px; margin: 14px 0; word-break: break-all; }
+  p { font-size: 17px; margin: 8px 0; color: #444; }
+  .time { color: #777; font-size: 15px; }
+  button { margin-top: 18px; font-size: 18px; font-weight: 700; padding: 14px 22px; border-radius: 12px; border: 0;
+           background: #1b1b1b; color: #fff; width: 100%; }
+  button[hidden] { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <div class="badge sending" id="badge">…</div>
+  <h1 id="title">Sending scan…</h1>
+  <div class="label" id="label"></div>
+  <p id="msg">Hold on one second.</p>
+  <p class="time" id="time"></p>
+  <button id="retry" hidden>Try again</button>
+</main>
+<script>
+(function () {
+  // ---- The only setting: the "QR scan → update Factory Label" automation webhook ----
+  var WEBHOOK = "https://hooks.airtable.com/workflows/v1/genericWebhook/appdkkKINWDrpiX76/wflx3hEcOneyq7FyF/wtreVskrWxFclZoQT";
+
+  var qs = new URLSearchParams(location.search);
+  var label = (qs.get("l") || qs.get("label") || "").trim();
+
+  var badge = document.getElementById("badge"), title = document.getElementById("title"),
+      msg = document.getElementById("msg"), lbl = document.getElementById("label"),
+      time = document.getElementById("time"), retry = document.getElementById("retry");
+
+  lbl.textContent = label || "(no label)";
+
+  function show(state, t, m) {
+    badge.className = "badge " + state;
+    badge.textContent = state === "ok" ? "✓" : state === "err" ? "!" : "…";
+    title.textContent = t; msg.textContent = m;
+    retry.hidden = state !== "err";
+  }
+
+  function send() {
+    if (!label) { show("err", "No label in this code", "This QR code is missing its label ID. Reprint the label."); retry.hidden = true; return; }
+    show("sending", "Sending scan…", "Hold on one second.");
+    // form-encoded + no-cors = a "simple request": no CORS preflight, so it reaches Airtable
+    // from any host. The response is opaque, which is fine - Airtable applies the rules.
+    fetch(WEBHOOK, {
+      method: "POST", mode: "no-cors", cache: "no-store", keepalive: true,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "label=" + encodeURIComponent(label) + "&scannedAt=" + encodeURIComponent(new Date().toISOString())
+    }).then(function () {
+      show("ok", "Scan received", "This piece is now marked In Production (unless it was already In Production or Complete).");
+      time.textContent = new Date().toLocaleString();
+    }).catch(function () {
+      show("err", "Not sent", "No connection. Check Wi-Fi or signal and tap Try again.");
+    });
+  }
+
+  retry.addEventListener("click", send);
+  send();
+})();
+</script>
+</body>
+</html>
