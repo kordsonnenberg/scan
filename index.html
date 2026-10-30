@@ -15,7 +15,11 @@
     padding: 24px calc(16px + env(safe-area-inset-right)) 24px calc(16px + env(safe-area-inset-left));
     box-sizing: border-box; text-align: center;
   }
+  body.packing { background: #eef4ff; }
   main { width: 100%; max-width: 420px; }
+  .station { display: inline-block; font-size: 14px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+             padding: 6px 12px; border-radius: 999px; background: #ddd; color: #333; margin-bottom: 18px; }
+  body.packing .station { background: #1a56c4; color: #fff; }
   .badge {
     width: 128px; height: 128px; border-radius: 50%; margin: 0 auto 20px;
     display: flex; align-items: center; justify-content: center;
@@ -24,6 +28,7 @@
   }
   .badge.sending { background: #9a9a9a; animation: pulse 1s infinite; }
   .badge.ok      { background: #1e8e3e; }
+  .badge.undo    { background: #b06000; }
   .badge.err     { background: #c5221f; }
   @keyframes pulse { 50% { opacity: .55; } }
   h1 { font-size: 30px; margin: 0 0 8px; font-weight: 800; letter-spacing: .01em; }
@@ -33,57 +38,133 @@
   .time { color: #777; font-size: 15px; }
   button { margin-top: 18px; font-size: 18px; font-weight: 700; padding: 14px 22px; border-radius: 12px; border: 0;
            background: #1b1b1b; color: #fff; width: 100%; }
+  button.undo { background: #fff; color: #b06000; border: 2px solid #b06000; }
   button[hidden] { display: none; }
 </style>
 </head>
 <body>
 <main>
+  <div class="station" id="station">Production scan</div>
   <div class="badge sending" id="badge">…</div>
   <h1 id="title">Sending scan…</h1>
   <div class="label" id="label"></div>
   <p id="msg">Hold on one second.</p>
   <p class="time" id="time"></p>
+  <button id="undo" class="undo" hidden>Undo – that was the wrong piece</button>
   <button id="retry" hidden>Try again</button>
 </main>
 <script>
 (function () {
-  // ---- The only setting: the "QR scan → update Factory Label" automation webhook ----
-  var WEBHOOK = "https://hooks.airtable.com/workflows/v1/genericWebhook/appdkkKINWDrpiX76/wflx3hEcOneyq7FyF/wtreVskrWxFclZoQT";
+  // ---- Settings: Airtable automation webhooks ----
+  // Production scan: "QR scan → update Factory Label" (Ready To Cut → In Production, scan dates)
+  var PRODUCTION_WEBHOOK = "https://hooks.airtable.com/workflows/v1/genericWebhook/appdkkKINWDrpiX76/wflx3hEcOneyq7FyF/wtreVskrWxFclZoQT";
+  // Packing station scan: "Packing station scan → Complete" (Complete + queue packing label; also Undo)
+  var PACKING_WEBHOOK = "https://hooks.airtable.com/workflows/v1/genericWebhook/appdkkKINWDrpiX76/wfldcQLfo4acr3AQ8/wtrI7VJvZJX1VN9X3";
+  var UNDO_SECONDS = 30;
+
+  // ---- Station setup: open this page once with ?station=packing (or ?station=production) on a phone ----
+  var KEY = "ulStation";
+  function getStation() { try { return localStorage.getItem(KEY) || "production"; } catch (e) { return "production"; } }
+  function setStation(v) { try { localStorage.setItem(KEY, v); return true; } catch (e) { return false; } }
 
   var qs = new URLSearchParams(location.search);
   var label = (qs.get("l") || qs.get("label") || "").trim();
+  var setup = (qs.get("station") || "").trim().toLowerCase();
 
   var badge = document.getElementById("badge"), title = document.getElementById("title"),
       msg = document.getElementById("msg"), lbl = document.getElementById("label"),
-      time = document.getElementById("time"), retry = document.getElementById("retry");
+      time = document.getElementById("time"), retry = document.getElementById("retry"),
+      undoBtn = document.getElementById("undo"), station = document.getElementById("station");
 
-  lbl.textContent = label || "(no label)";
+  function paintStation() {
+    var s = getStation();
+    document.body.classList.toggle("packing", s === "packing");
+    station.textContent = s === "packing" ? "Packing station" : "Production scan";
+  }
 
   function show(state, t, m) {
     badge.className = "badge " + state;
-    badge.textContent = state === "ok" ? "✓" : state === "err" ? "!" : "…";
+    badge.textContent = state === "ok" ? "✓" : state === "err" ? "!" : state === "undo" ? "↺" : "…";
     title.textContent = t; msg.textContent = m;
     retry.hidden = state !== "err";
   }
 
-  function send() {
-    if (!label) { show("err", "No label in this code", "This QR code is missing its label ID. Reprint the label."); retry.hidden = true; return; }
-    show("sending", "Sending scan…", "Hold on one second.");
-    // form-encoded + no-cors = a "simple request": no CORS preflight, so it reaches Airtable
-    // from any host. The response is opaque, which is fine - Airtable applies the rules.
-    fetch(WEBHOOK, {
+  function post(url, body) {
+    // form-encoded + no-cors = a "simple request": no CORS preflight, so it reaches Airtable from any host.
+    return fetch(url, {
       method: "POST", mode: "no-cors", cache: "no-store", keepalive: true,
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: "label=" + encodeURIComponent(label) + "&scannedAt=" + encodeURIComponent(new Date().toISOString())
-    }).then(function () {
-      show("ok", "Scan received", "This piece is now marked In Production (unless it was already In Production or Complete).");
-      time.textContent = new Date().toLocaleString();
-    }).catch(function () {
-      show("err", "Not sent", "No connection. Check Wi-Fi or signal and tap Try again.");
+      body: body
     });
   }
 
-  retry.addEventListener("click", send);
+  if (setup === "packing" || setup === "production") {
+    var ok = setStation(setup);
+    paintStation();
+    lbl.hidden = true;
+    if (ok) {
+      show("ok", setup === "packing" ? "This phone is now the PACKING STATION" : "This phone is now a PRODUCTION scanner",
+        setup === "packing"
+          ? "Every factory label scanned on this phone will mark the piece COMPLETE and queue its packing label."
+          : "Scans on this phone mark pieces In Production, as before.");
+    } else {
+      show("err", "Could not save the setting", "This browser is blocking storage (private browsing?). Open the setup link in a normal browser window.");
+      retry.hidden = true;
+    }
+    return;
+  }
+
+  paintStation();
+  lbl.textContent = label || "(no label)";
+  var mode = getStation();
+  var undoTimer = null;
+
+  function sendProduction() {
+    show("sending", "Sending scan…", "Hold on one second.");
+    post(PRODUCTION_WEBHOOK, "label=" + encodeURIComponent(label) + "&scannedAt=" + encodeURIComponent(new Date().toISOString()))
+      .then(function () {
+        show("ok", "Scan received", "This piece is now marked In Production (unless it was already In Production or Complete).");
+        time.textContent = new Date().toLocaleString();
+      }).catch(function () {
+        show("err", "Not sent", "No connection. Check Wi-Fi or signal and tap Try again.");
+      });
+  }
+
+  function sendPacking() {
+    show("sending", "Marking complete…", "Hold on one second.");
+    post(PACKING_WEBHOOK, "label=" + encodeURIComponent(label) + "&action=complete&scannedAt=" + encodeURIComponent(new Date().toISOString()))
+      .then(function () {
+        show("ok", "COMPLETE – ready to pack", "Its packing label is now waiting to be printed.");
+        time.textContent = new Date().toLocaleString();
+        try { navigator.vibrate && navigator.vibrate(120); } catch (e) {}
+        undoBtn.hidden = false;
+        clearTimeout(undoTimer);
+        undoTimer = setTimeout(function () { undoBtn.hidden = true; }, UNDO_SECONDS * 1000);
+      }).catch(function () {
+        show("err", "Not sent", "No connection. Check Wi-Fi or signal and tap Try again.");
+      });
+  }
+
+  function sendUndo() {
+    undoBtn.hidden = true; clearTimeout(undoTimer);
+    show("sending", "Undoing…", "Hold on one second.");
+    post(PACKING_WEBHOOK, "label=" + encodeURIComponent(label) + "&action=undo&scannedAt=" + encodeURIComponent(new Date().toISOString()))
+      .then(function () {
+        show("undo", "Undone", "This piece is back to In Production and its packing label is no longer queued.");
+        time.textContent = new Date().toLocaleString();
+      }).catch(function () {
+        show("err", "Undo not sent", "No connection. Tap Try again, or tell the office to set this piece back.");
+        retry.onclick = sendUndo;
+      });
+  }
+
+  function send() {
+    if (!label) { show("err", "No label in this code", "This QR code is missing its label ID. Reprint the label."); retry.hidden = true; return; }
+    if (mode === "packing") sendPacking(); else sendProduction();
+  }
+
+  undoBtn.addEventListener("click", sendUndo);
+  retry.onclick = send;
   send();
 })();
 </script>

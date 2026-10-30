@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>United Leather - One-time setup</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f4f4f2; color: #1b1b1b;
+         max-width: 440px; margin: 0 auto; padding: 32px 16px; text-align: center; }
+  button { font-size: 18px; font-weight: 700; padding: 14px 22px; border-radius: 12px; border: 0; background: #1b1b1b; color: #fff; width: 100%; }
+  p { font-size: 16px; color: #444; } #out { font-weight: 700; margin-top: 16px; }
+</style>
+</head>
+<body>
+  <h1>One-time setup</h1>
+  <p>Sends three harmless test signals (for a piece called <b>SAMPLE-L1-P1</b> that does not exist) so Airtable can learn the format of the packing and loading scans. Nothing in your data changes.</p>
+  <button id="go">Send test signals</button>
+  <div id="out"></div>
+<script>
+(function () {
+  var hooks = [
+    ["Packing station", "https://hooks.airtable.com/workflows/v1/genericWebhook/appdkkKINWDrpiX76/wfldcQLfo4acr3AQ8/wtrI7VJvZJX1VN9X3", "label=SAMPLE-L1-P1&action=complete&scannedAt=2026-10-30T12%3A00%3A00Z"],
+    ["Piece loaded", "https://hooks.airtable.com/workflows/v1/genericWebhook/appdkkKINWDrpiX76/wflFvWko8CYkCq3zN/wtrH1SM89ls2mtbG4", "label=SAMPLE-L1-P1&load=LOAD-SAMPLE"],
+    ["Order loaded", "https://hooks.airtable.com/workflows/v1/genericWebhook/appdkkKINWDrpiX76/wflF9VHie1yywLbqp/wtrx7xSqoY0vDox06", "so=SAMPLE&load=LOAD-SAMPLE"]
+  ];
+  document.getElementById("go").onclick = function () {
+    var out = document.getElementById("out"); out.textContent = "Sending…";
+    var i = 0;
+    (function next() {
+      if (i >= hooks.length) { out.textContent = "✓ All 3 sent. Tell Claude it's done."; return; }
+      var h = hooks[i++];
+      fetch(h[1], { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: h[2] })
+        .then(function () { setTimeout(next, 500); })
+        .catch(function () { out.textContent = "✗ " + h[0] + " failed — check the connection and tap again."; });
+    })();
+  };
+})();
+</script>
+</body>
+</html>
