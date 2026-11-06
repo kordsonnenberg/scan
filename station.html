@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1a56c4">
+<title>United Leather - Packing Station</title>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<style>
+  :root { color-scheme: light; --blue: #1a56c4; --ok: #1e8e3e; --warn: #b06000; --bad: #c5221f; --ink: #1b1b1b; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: #eef4ff; color: var(--ink); overflow: hidden; -webkit-user-select: none; user-select: none; }
+  .app { height: 100%; display: grid; grid-template-rows: auto 1fr; padding: 14px calc(14px + env(safe-area-inset-right)) 14px calc(14px + env(safe-area-inset-left)); gap: 12px; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .tag { font-size: 15px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 7px 14px; border-radius: 999px; background: var(--blue); color: #fff; }
+  .count { font-size: 18px; font-weight: 700; }
+  .net { font-size: 15px; font-weight: 700; padding: 6px 12px; border-radius: 999px; background: #dfe9da; color: #1e5e2e; }
+  .net.wait { background: #ffe7c2; color: #8a4b00; }
+  .spacer { flex: 1; }
+  .hbtn { font-size: 15px; font-weight: 700; padding: 9px 14px; border-radius: 10px; border: 2px solid #c9d6ee; background: #fff; color: var(--ink); }
+  .main { display: grid; gap: 14px; min-height: 0; grid-template-columns: 1fr 1fr; }
+  @media (orientation: portrait) { .main { grid-template-columns: 1fr; grid-template-rows: minmax(0, 46%) 1fr; } }
+  .cam { position: relative; background: #111; border-radius: 18px; overflow: hidden; min-height: 0; }
+  .cam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .cam.mirror video { transform: scaleX(-1); }
+  .aim { position: absolute; left: 50%; top: 50%; width: 58%; aspect-ratio: 1; transform: translate(-50%, -50%);
+         border: 5px solid rgba(255, 255, 255, .85); border-radius: 18px; box-shadow: 0 0 0 2000px rgba(0, 0, 0, .25); pointer-events: none; }
+  .cam.hit .aim { border-color: #3ddc6a; }
+  .camhint { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center; color: #fff; font-size: 18px; font-weight: 700; text-shadow: 0 1px 4px rgba(0, 0, 0, .8); }
+  .side { display: grid; grid-template-rows: auto 1fr; gap: 12px; min-height: 0; }
+  .result { border-radius: 18px; padding: 22px 24px; background: #fff; border: 3px solid #d5dcea; min-height: 230px; display: flex; flex-direction: column; justify-content: center; }
+  .result .big { font-size: 34px; font-weight: 800; line-height: 1.15; }
+  .result .lid { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 30px; font-weight: 800; margin-top: 12px; word-break: break-all; }
+  .result .small { font-size: 18px; margin-top: 8px; opacity: .92; }
+  .result.ok { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .result.warn { background: #fff4e0; border-color: var(--warn); color: #6b3a00; }
+  .result.bad { background: var(--bad); border-color: var(--bad); color: #fff; }
+  .result.undone { background: #fff4e0; border-color: var(--warn); color: #6b3a00; }
+  .result.ready .big { color: #3a4a66; }
+  .undo { margin-top: 16px; font-size: 20px; font-weight: 800; padding: 14px 18px; border-radius: 12px; border: 3px solid #fff; background: transparent; color: #fff; align-self: flex-start; }
+  .undo[hidden] { display: none; }
+  .log { background: #fff; border-radius: 18px; border: 2px solid #d5dcea; padding: 12px 16px; overflow: auto; min-height: 0; }
+  .log h2 { font-size: 15px; letter-spacing: .06em; text-transform: uppercase; color: #5b6b86; margin: 4px 0 8px; }
+  .row { display: flex; gap: 12px; align-items: baseline; padding: 8px 0; border-top: 1px solid #edf0f6; font-size: 17px; }
+  .row:first-of-type { border-top: 0; }
+  .row .t { color: #6b7790; width: 82px; flex: none; }
+  .row .l { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; flex: 1; word-break: break-all; }
+  .row .s { font-weight: 700; flex: none; }
+  .s.sent { color: var(--ok); } .s.queued { color: var(--warn); } .s.undone { color: #8a8a8a; text-decoration: line-through; }
+  .start { position: fixed; inset: 0; background: rgba(238, 244, 255, .97); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center; padding: 24px; z-index: 10; }
+  .start[hidden] { display: none; }
+  .start h1 { font-size: 34px; margin: 0; }
+  .start p { font-size: 19px; color: #3a4a66; margin: 0; max-width: 560px; }
+  .start button { font-size: 26px; font-weight: 800; padding: 20px 44px; border-radius: 16px; border: 0; background: var(--blue); color: #fff; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <span class="tag">Packing station</span>
+    <span class="count" id="count">Today: 0 pieces</span>
+    <span class="net" id="net">All sent</span>
+    <span class="spacer"></span>
+    <button class="hbtn" id="switchCam">Switch camera</button>
+    <button class="hbtn" id="fullBtn">Full screen</button>
+  </header>
+  <div class="main">
+    <div class="cam" id="cam">
+      <video id="video" playsinline muted autoplay></video>
+      <div class="aim"></div>
+      <div class="camhint" id="camhint">Hold the factory label's QR code in the box</div>
+    </div>
+    <div class="side">
+      <div class="result ready" id="result">
+        <div class="big" id="rBig">Ready for the next piece</div>
+        <div class="lid" id="rLid"></div>
+        <div class="small" id="rSmall">Scan the FACTORY label when a piece is finished and ready to wrap.</div>
+        <button class="undo" id="undoBtn" hidden>Undo – wrong piece</button>
+      </div>
+      <div class="log"><h2>Scanned today</h2><div id="rows"></div></div>
+    </div>
+  </div>
+</div>
+<div class="start" id="start">
+  <span class="tag">Packing station</span>
+  <h1>Scan finished pieces</h1>
+  <p>Each factory label you scan marks the piece COMPLETE and puts its packing label in the print queue.</p>
+  <button id="startBtn">Start scanning</button>
+  <p id="startMsg"></p>
+</div>
+<script>
+(function () {
+  // ---- Settings ----
+  // Airtable automation "Packing station scan → Complete" (wfldcQLfo4acr3AQ8): complete | undo
+  var PACKING_WEBHOOK = "https://hooks.airtable.com/workflows/v1/genericWebhook/appdkkKINWDrpiX76/wfldcQLfo4acr3AQ8/wtrI7VJvZJX1VN9X3";
+  var UNDO_SECONDS = 30;          // same rule as the phone scan page
+  var SAME_CODE_IGNORE_MS = 4000; // the camera sees the same code many times a second
+  var RETRY_MS = 15000;           // retry unsent scans this often
+  var SEND_GAP_MS = 600;          // pause between queued posts
+  var UNDO_AFTER_MS = 6000;       // let Airtable finish the "complete" before an undo arrives
+  var LOG_KEY = "ulPackLog", Q_KEY = "ulPackQueue", CAM_KEY = "ulPackCam";
+
+  var $ = function (id) { return document.getElementById(id); };
+  function load(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
+  function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function today() { var d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); }
+  function hhmm(iso) { var d = new Date(iso); var h = d.getHours(), m = d.getMinutes(); return ((h % 12) || 12) + ":" + (m < 10 ? "0" : "") + m + (h < 12 ? " am" : " pm"); }
+
+  // log = today's scans [{id, label, at, status: queued|sent|undone, undoQueued}]
+  var log = load(LOG_KEY, null);
+  if (!log || log.day !== today()) log = { day: today(), items: [] };
+  var queue = load(Q_KEY, []); // [{id, label, action, at}]
+  function persist() { save(LOG_KEY, log); save(Q_KEY, queue); }
+
+  // ---------- sounds ----------
+  var actx = null;
+  function beep(kind) {
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === "suspended") actx.resume();
+      var tones = kind === "ok" ? [[880, .09], [1320, .14]] : kind === "warn" ? [[520, .18]] : kind === "undo" ? [[660, .1], [440, .16]] : [[220, .22], [180, .3]];
+      var t = actx.currentTime;
+      tones.forEach(function (tn) {
+        var o = actx.createOscillator(), g = actx.createGain();
+        o.type = kind === "bad" ? "square" : "sine"; o.frequency.value = tn[0];
+        g.gain.setValueAtTime(.3, t); g.gain.exponentialRampToValueAtTime(.001, t + tn[1]);
+        o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + tn[1]); t += tn[1] + .03;
+      });
+    } catch (e) {}
+    try { if (navigator.vibrate) navigator.vibrate(kind === "bad" ? [250, 80, 250] : 60); } catch (e) {}
+  }
+
+  // ---------- result panel ----------
+  var undoTarget = null, undoTimer = null, undoTick = null, readyTimer = null;
+  function show(kind, big, lid, small) {
+    var r = $("result");
+    r.className = "result " + kind;
+    $("rBig").textContent = big; $("rLid").textContent = lid || ""; $("rSmall").textContent = small || "";
+    clearTimeout(readyTimer);
+    if (kind === "bad" || kind === "warn" || kind === "undone") {
+      readyTimer = setTimeout(function () { if (!undoTarget) ready(); }, 6000);
+    }
+  }
+  function ready() { show("ready", "Ready for the next piece", "", "Scan the FACTORY label when a piece is finished and ready to wrap."); }
+  function hideUndo() { undoTarget = null; clearTimeout(undoTimer); clearInterval(undoTick); $("undoBtn").hidden = true; }
+  function offerUndo(item) {
+    hideUndo();
+    undoTarget = item;
+    var left = UNDO_SECONDS;
+    var b = $("undoBtn");
+    b.textContent = "Undo – wrong piece (" + left + ")"; b.hidden = false;
+    undoTick = setInterval(function () { left--; b.textContent = "Undo – wrong piece (" + left + ")"; }, 1000);
+    undoTimer = setTimeout(function () { hideUndo(); }, UNDO_SECONDS * 1000);
+  }
+
+  // ---------- list + counters ----------
+  function render() {
+    var done = log.items.filter(function (i) { return i.status !== "undone"; }).length;
+    $("count").textContent = "Today: " + done + " piece" + (done === 1 ? "" : "s");
+    var net = $("net");
+    if (queue.length && sendFailed) { net.className = "net wait"; net.textContent = queue.length + " waiting to send – check Wi-Fi"; }
+    else if (queue.length) { net.className = "net"; net.textContent = "Sending…"; }
+    else { net.className = "net"; net.textContent = "All sent"; }
+    var html = "";
+    log.items.slice().reverse().slice(0, 40).forEach(function (i) {
+      var s = i.status === "sent" ? "Complete ✓" : i.status === "queued" ? "Waiting to send" : "Undone";
+      html += '<div class="row"><span class="t">' + hhmm(i.at) + '</span><span class="l">' + esc(i.label) + '</span><span class="s ' + i.status + '">' + s + "</span></div>";
+    });
+    $("rows").innerHTML = html || '<div class="row"><span class="t"></span><span class="l" style="font-family:inherit;font-weight:400;color:#6b7790">Nothing scanned yet today.</span></div>';
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  // ---------- sending (queued, survives reloads and Wi-Fi drops) ----------
+  var sending = false, retryTimer = null, sendFailed = false; // "check Wi-Fi" only after a send really failed
+  function post(item) {
+    // form-encoded + no-cors = a "simple request": no CORS preflight, reaches Airtable from any host.
+    var body = "label=" + encodeURIComponent(item.label) + "&action=" + item.action + "&scannedAt=" + encodeURIComponent(item.at);
+    return fetch(PACKING_WEBHOOK, { method: "POST", mode: "no-cors", cache: "no-store", keepalive: true,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: body });
+  }
+  function pump() {
+    if (sending || !queue.length) return;
+    var item = queue[0];
+    if (item.notBefore && Date.now() < item.notBefore) {
+      clearTimeout(retryTimer); retryTimer = setTimeout(pump, item.notBefore - Date.now() + 50);
+      return;
+    }
+    sending = true;
+    post(item).then(function () {
+      queue.shift(); sendFailed = false;
+      var li = find(item.id);
+      if (li && item.action === "complete") { li.sentAt = Date.now(); if (li.status === "queued") li.status = "sent"; }
+      persist(); render(); sending = false;
+      if (queue.length) setTimeout(pump, SEND_GAP_MS);
+    }).catch(function () {
+      sending = false; sendFailed = true; render();
+      clearTimeout(retryTimer); retryTimer = setTimeout(pump, RETRY_MS);
+    });
+  }
+  window.addEventListener("online", function () { clearTimeout(retryTimer); pump(); });
+  function find(id) { for (var i = 0; i < log.items.length; i++) if (log.items[i].id === id) return log.items[i]; return null; }
+
+  // ---------- handling a scanned code ----------
+  function parse(text) {
+    text = String(text || "").trim();
+    var url = null;
+    try { url = new URL(text); } catch (e) {}
+    if (url) {
+      var path = url.pathname.toLowerCase();
+      if (/piece\.html$/.test(path)) return { kind: "packing" };
+      if (/load\.html$/.test(path) || url.searchParams.get("o") !== null) return { kind: "slip" };
+      var l = url.searchParams.get("l") || url.searchParams.get("label");
+      if (l && /^[A-Za-z0-9-]+-L\d+-P\d+$/i.test(l.trim())) return { kind: "factory", label: l.trim().toUpperCase() };
+      return { kind: "unknown" };
+    }
+    if (/^[A-Za-z0-9-]+-L\d+-P\d+$/i.test(text)) return { kind: "factory", label: text.toUpperCase() };
+    return { kind: "unknown" };
+  }
+
+  var muted = {}; // label -> time until which it is ignored (right after an Undo)
+  function newDay() { if (log.day !== today()) { log = { day: today(), items: [] }; hideUndo(); persist(); render(); } }
+  setInterval(newDay, 60000); // the page stays open overnight
+  function handle(text) {
+    newDay();
+    var p = parse(text);
+    if (p.kind === "factory" && muted[p.label] && Date.now() < muted[p.label]) return;
+    if (p.kind === "packing") { beep("bad"); return show("bad", "That's a PACKING label", "", "Scan the FACTORY label instead (the one with the cutting details)."); }
+    if (p.kind === "slip") { beep("bad"); return show("bad", "That's a packing slip", "", "Packing slips are scanned at loading, not here."); }
+    if (p.kind !== "factory") { beep("bad"); return show("bad", "Not a factory label", "", "That QR code isn't a United Leather factory label."); }
+    for (var i = log.items.length - 1; i >= 0; i--) {
+      var it = log.items[i];
+      if (it.label === p.label && it.status !== "undone") {
+        if (it === undoTarget) return; // still in front of the camera right after its scan
+        beep("warn");
+        return show("warn", "Already scanned", p.label, "Scanned at " + hhmm(it.at) + ". It only counts once – nothing was sent.");
+      }
+    }
+    var item = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), label: p.label, at: new Date().toISOString(), status: "queued" };
+    log.items.push(item);
+    queue.push({ id: item.id, label: item.label, action: "complete", at: item.at });
+    persist(); render(); pump();
+    beep("ok");
+    show("ok", "✓ COMPLETE – ready to pack", p.label, "Its packing label is now waiting to be printed. Check the number matches the piece.");
+    offerUndo(item);
+  }
+
+  $("undoBtn").onclick = function () {
+    var item = undoTarget; if (!item) return;
+    hideUndo();
+    var qi = -1;
+    for (var i = 0; i < queue.length; i++) if (queue[i].id === item.id && queue[i].action === "complete") qi = i;
+    if (qi > 0 || (qi === 0 && !sending)) {
+      queue.splice(qi, 1); // never left the tablet: just drop it
+    } else {
+      queue.push({ id: item.id, label: item.label, action: "undo", at: new Date().toISOString(), notBefore: (item.sentAt || Date.now()) + UNDO_AFTER_MS });
+    }
+    item.status = "undone";
+    muted[item.label] = Date.now() + 20000; // don't re-complete it if the label is still in front of the camera
+    persist(); render(); pump();
+    beep("undo");
+    show("undone", "Undone", item.label, "This piece is back to In Production and its packing label is no longer queued.");
+  };
+
+  // ---------- camera ----------
+  var video = $("video"), canvas = document.createElement("canvas"), ctx = canvas.getContext("2d", { willReadFrequently: true });
+  var detector = null, lastText = "", lastAt = 0, busy = false, stream = null;
+  var facing = load(CAM_KEY, "user"); // tablet on a stand facing the packer: front camera by default
+  if ("BarcodeDetector" in window) { try { detector = new window.BarcodeDetector({ formats: ["qr_code"] }); } catch (e) { detector = null; } }
+
+  function seen(text) {
+    var now = Date.now();
+    if (text === lastText && now - lastAt < SAME_CODE_IGNORE_MS) return;
+    lastText = text; lastAt = now;
+    var cam = $("cam"); cam.classList.add("hit"); setTimeout(function () { cam.classList.remove("hit"); }, 400);
+    handle(text);
+  }
+  function tick() {
+    if (stream && video.readyState >= 2 && !busy && !document.hidden) {
+      if (detector) {
+        busy = true;
+        detector.detect(video).then(function (r) { if (r && r.length) seen(r[0].rawValue); }).catch(function () {}).then(function () { busy = false; });
+      } else if (window.jsQR) {
+        var w = video.videoWidth, h = video.videoHeight, s = Math.min(1, 960 / Math.max(w, h));
+        canvas.width = Math.round(w * s); canvas.height = Math.round(h * s);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        var img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        var code = window.jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
+        if (code && code.data) seen(code.data);
+      }
+    }
+    setTimeout(tick, 120);
+  }
+  function startCamera() {
+    if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+    $("cam").classList.toggle("mirror", facing === "user");
+    return navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
+      .then(function (s) { stream = s; video.srcObject = s; return video.play(); })
+      .then(function () { $("camhint").textContent = "Hold the factory label's QR code in the box"; });
+  }
+  $("switchCam").onclick = function () {
+    facing = facing === "user" ? "environment" : "user"; save(CAM_KEY, facing);
+    startCamera().catch(function () { $("camhint").textContent = "Could not switch camera"; });
+  };
+
+  // ---------- keep the screen on ----------
+  var wakeLock = null;
+  function keepAwake() {
+    try { if ("wakeLock" in navigator && !document.hidden) navigator.wakeLock.request("screen").then(function (w) { wakeLock = w; }).catch(function () {}); } catch (e) {}
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) { keepAwake(); if (stream && video.paused) video.play().catch(function () {}); pump(); }
+  });
+
+  // ---------- full screen ----------
+  function goFull() { try { var el = document.documentElement; (el.requestFullscreen || el.webkitRequestFullscreen).call(el); } catch (e) {} }
+  $("fullBtn").onclick = goFull;
+
+  // ---------- Bluetooth / USB scanners (they type the QR text, then Enter) ----------
+  var kb = "", kbAt = 0, kbTimer = null;
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { if (kb.length > 4) seen(kb); kb = ""; return; }
+    if (e.key.length !== 1) return;
+    var now = Date.now();
+    if (now - kbAt > 300) kb = "";
+    kb += e.key; kbAt = now;
+    clearTimeout(kbTimer);
+    kbTimer = setTimeout(function () { if (kb.length > 12) seen(kb); kb = ""; }, 250); // scanners without Enter
+  });
+
+  // ---------- start ----------
+  $("startBtn").onclick = function () {
+    beep("ok"); // unlocks sound
+    goFull(); keepAwake();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      $("start").hidden = true; $("camhint").textContent = "No camera here – a Bluetooth scanner still works";
+      return;
+    }
+    startCamera().then(function () { $("start").hidden = true; tick(); })
+      .catch(function () { $("startMsg").textContent = "Camera blocked. In Chrome, tap the icon left of the address, allow Camera, then reload this page."; });
+  };
+
+  window.__handle = handle; // used by tests
+  render(); ready(); pump();
+})();
+</script>
+</body>
+</html>
