@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#b45309">
+<title>United Leather - Cutting Station</title>
+<style>
+  :root { color-scheme: light; --tag: #b45309; --ok: #1e8e3e; --warn: #b06000; --bad: #c5221f; --ink: #1b1b1b; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: #fbf6ee; color: var(--ink); overflow: hidden; -webkit-user-select: none; user-select: none; cursor: default; }
+  .app { height: 100%; display: grid; grid-template-rows: auto 1fr auto; padding: 18px; gap: 16px; }
+  header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .tag { font-size: 18px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 8px 16px; border-radius: 999px; background: var(--tag); color: #fff; }
+  .count { font-size: 22px; font-weight: 700; }
+  .net { font-size: 17px; font-weight: 700; padding: 6px 14px; border-radius: 999px; background: #dfe9da; color: #1e5e2e; }
+  .net.wait { background: #ffe7c2; color: #8a4b00; }
+  .spacer { flex: 1; }
+  .clock { font-size: 22px; font-weight: 700; color: #6b5a40; }
+  .hbtn { font-size: 16px; font-weight: 700; padding: 9px 14px; border-radius: 10px; border: 2px solid #e2d6c2; background: #fff; color: var(--ink); }
+  .main { display: grid; gap: 16px; min-height: 0; grid-template-columns: 3fr 2fr; }
+  @media (max-aspect-ratio: 1/1) { .main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } }
+  .result { border-radius: 22px; padding: 34px 40px; background: #fff; border: 4px solid #e6dccb; display: flex; flex-direction: column; justify-content: center; min-height: 0; }
+  .result .big { font-size: clamp(40px, 5.6vw, 92px); font-weight: 800; line-height: 1.08; }
+  .result .lid { font-family: ui-monospace, SFMono-Regular, Consolas, Menlo, monospace; font-size: clamp(32px, 4.2vw, 70px); font-weight: 800; margin-top: 18px; word-break: break-all; }
+  .result .small { font-size: clamp(18px, 1.6vw, 28px); margin-top: 18px; opacity: .93; line-height: 1.35; word-break: break-word; }
+  .result.ok { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .result.warn { background: #fff4e0; border-color: var(--warn); color: #6b3a00; }
+  .result.bad { background: var(--bad); border-color: var(--bad); color: #fff; }
+  .result.ready .big { color: #5a4a30; }
+  .log { background: #fff; border-radius: 22px; border: 2px solid #e6dccb; padding: 16px 20px; overflow: auto; min-height: 0; }
+  .log h2 { font-size: 17px; letter-spacing: .06em; text-transform: uppercase; color: #7a6a50; margin: 4px 0 10px; }
+  .row { display: flex; gap: 14px; align-items: baseline; padding: 10px 0; border-top: 1px solid #f1eadf; font-size: 21px; }
+  .row:first-of-type { border-top: 0; }
+  .row .t { color: #7a6f60; width: 96px; flex: none; }
+  .row .l { font-family: ui-monospace, SFMono-Regular, Consolas, Menlo, monospace; font-weight: 700; flex: 1; word-break: break-all; }
+  .row .s { font-weight: 700; flex: none; }
+  .s.sent { color: var(--ok); } .s.queued { color: var(--warn); }
+  footer { font-size: 18px; color: #6b5a40; text-align: center; }
+  /* shown whenever this window doesn't have the keyboard: the scanner types somewhere else */
+  .nofocus { position: fixed; inset: 0; background: rgba(197, 34, 31, .93); color: #fff; display: flex; flex-direction: column;
+             align-items: center; justify-content: center; gap: 16px; text-align: center; padding: 30px; z-index: 10; cursor: pointer; }
+  .nofocus[hidden] { display: none; }
+  .nofocus b { font-size: clamp(36px, 5vw, 80px); }
+  .nofocus span { font-size: clamp(20px, 2vw, 32px); max-width: 1000px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <span class="tag">Cutting station</span>
+    <span class="count" id="count">Today: 0 pieces</span>
+    <span class="net" id="net">All sent</span>
+    <span class="spacer"></span>
+    <span class="clock" id="clock"></span>
+    <button class="hbtn" id="fullBtn" tabindex="-1">Full screen</button>
+  </header>
+  <div class="main">
+    <div class="result ready" id="result">
+      <div class="big" id="rBig">Ready to scan</div>
+      <div class="lid" id="rLid"></div>
+      <div class="small" id="rSmall">Scan the piece's FACTORY label when you start cutting it.</div>
+    </div>
+    <div class="log"><h2>Scanned today</h2><div id="rows"></div></div>
+  </div>
+  <footer>Scanned the wrong piece? Tell the office – they set it back to Ready To Cut.</footer>
+</div>
+<div class="nofocus" id="nofocus" hidden>
+  <b>Click here to scan</b>
+  <span>The scanner only works when this screen is in front. Click anywhere on it, then scan again.</span>
+</div>
+<script>
+(function () {
+  // ---- Settings ----
+  // Airtable automation "QR scan → update Factory Label" (wflx3hEcOneyq7FyF): Ready To Cut → In Production,
+  // First / Last Scan Date. Same webhook the phones use; it never moves a piece backwards.
+  var PRODUCTION_WEBHOOK = "https://hooks.airtable.com/workflows/v1/genericWebhook/appdkkKINWDrpiX76/wflx3hEcOneyq7FyF/wtreVskrWxFclZoQT";
+  var SOURCE = "cutting";          // sent with every scan (the automation ignores it today)
+  var SAME_CODE_IGNORE_MS = 10000; // hands-free scanners re-read a label left under them
+  var RETRY_MS = 15000;            // retry unsent scans this often
+  var SEND_GAP_MS = 500;           // pause between queued posts
+  var BACK_TO_READY_MS = 12000;    // result stays up this long
+  var LOG_KEY = "ulCutLog", Q_KEY = "ulCutQueue";
+
+  var $ = function (id) { return document.getElementById(id); };
+  function load(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
+  function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function today() { var d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); }
+  function hhmm(iso) { var d = new Date(iso); var h = d.getHours(), m = d.getMinutes(); return ((h % 12) || 12) + ":" + (m < 10 ? "0" : "") + m + (h < 12 ? " am" : " pm"); }
+
+  // log = today's scans [{id, label, at, status: queued|sent}]
+  var log = load(LOG_KEY, null);
+  if (!log || log.day !== today()) log = { day: today(), items: [] };
+  var queue = load(Q_KEY, []); // [{id, label, at}]
+  function persist() { save(LOG_KEY, log); save(Q_KEY, queue); }
+
+  // ---------- sounds (a key press counts as a user gesture, so the first scan unlocks sound) ----------
+  var actx = null;
+  function beep(kind) {
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === "suspended") actx.resume();
+      var tones = kind === "ok" ? [[880, .09], [1320, .14]] : kind === "warn" ? [[520, .18]] : [[220, .22], [180, .3]];
+      var t = actx.currentTime;
+      tones.forEach(function (tn) {
+        var o = actx.createOscillator(), g = actx.createGain();
+        o.type = kind === "bad" ? "square" : "sine"; o.frequency.value = tn[0];
+        g.gain.setValueAtTime(.3, t); g.gain.exponentialRampToValueAtTime(.001, t + tn[1]);
+        o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + tn[1]); t += tn[1] + .03;
+      });
+    } catch (e) {}
+  }
+
+  // ---------- result panel ----------
+  var readyTimer = null;
+  function show(kind, big, lid, small) {
+    $("result").className = "result " + kind;
+    $("rBig").textContent = big; $("rLid").textContent = lid || ""; $("rSmall").textContent = small || "";
+    clearTimeout(readyTimer);
+    if (kind !== "ready") readyTimer = setTimeout(ready, BACK_TO_READY_MS);
+  }
+  function ready() { show("ready", "Ready to scan", "", "Scan the piece's FACTORY label when you start cutting it."); }
+
+  function render() {
+    var n = log.items.length;
+    $("count").textContent = "Today: " + n + " piece" + (n === 1 ? "" : "s");
+    var net = $("net");
+    if (queue.length && sendFailed) { net.className = "net wait"; net.textContent = queue.length + " waiting to send – check the internet"; }
+    else if (queue.length) { net.className = "net"; net.textContent = "Sending…"; }
+    else { net.className = "net"; net.textContent = "All sent"; }
+    var html = "";
+    log.items.slice().reverse().slice(0, 60).forEach(function (i) {
+      var s = i.status === "sent" ? "Sent ✓" : "Waiting to send";
+      html += '<div class="row"><span class="t">' + hhmm(i.at) + '</span><span class="l">' + esc(i.label) + '</span><span class="s ' + i.status + '">' + s + "</span></div>";
+    });
+    $("rows").innerHTML = html || '<div class="row"><span class="t"></span><span class="l" style="font-family:inherit;font-weight:400;color:#7a6f60">Nothing scanned yet today.</span></div>';
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  // ---------- sending (queued, survives reloads and internet drops) ----------
+  var sending = false, retryTimer = null, sendFailed = false;
+  function post(item) {
+    // form-encoded + no-cors = a "simple request": no CORS preflight, reaches Airtable from any host.
+    var body = "label=" + encodeURIComponent(item.label) + "&scannedAt=" + encodeURIComponent(item.at) + "&source=" + SOURCE;
+    return fetch(PRODUCTION_WEBHOOK, { method: "POST", mode: "no-cors", cache: "no-store", keepalive: true,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: body });
+  }
+  function pump() {
+    if (sending || !queue.length) return;
+    var item = queue[0];
+    sending = true;
+    post(item).then(function () {
+      queue.shift(); sendFailed = false;
+      var li = find(item.id); if (li) li.status = "sent";
+      persist(); render(); sending = false;
+      if (queue.length) setTimeout(pump, SEND_GAP_MS);
+    }).catch(function () {
+      sending = false; sendFailed = true; render();
+      clearTimeout(retryTimer); retryTimer = setTimeout(pump, RETRY_MS);
+    });
+  }
+  window.addEventListener("online", function () { clearTimeout(retryTimer); pump(); });
+  function find(id) { for (var i = 0; i < log.items.length; i++) if (log.items[i].id === id) return log.items[i]; return null; }
+
+  // ---------- what was scanned ----------
+  // Case-insensitive on purpose: with Caps Lock on, a USB scanner types the URL in capitals.
+  var LABEL_RE = /^[A-Za-z0-9-]+-L\d+-P\d+$/i;
+  function parse(text) {
+    var t = String(text || "").trim(), low = t.toLowerCase();
+    if (/piece\.html/.test(low)) return { kind: "packing" };
+    if (/load(_h)?\.html/.test(low) || /[?&]o=/.test(low)) return { kind: "slip" };
+    var m = t.match(/[?&](?:l|label)=([A-Za-z0-9-]+)/i);
+    if (m && LABEL_RE.test(m[1])) return { kind: "factory", label: m[1].toUpperCase() };
+    if (LABEL_RE.test(t)) return { kind: "factory", label: t.toUpperCase() };
+    return { kind: "unknown", raw: t };
+  }
+
+  function newDay() { if (log.day !== today()) { log = { day: today(), items: [] }; persist(); render(); } }
+  setInterval(newDay, 60000); // the page stays open overnight
+
+  function handle(text) {
+    newDay();
+    var p = parse(text);
+    if (p.kind === "packing") { beep("bad"); return show("bad", "That's a PACKING label", "", "Scan the FACTORY label – the one with the cutting details."); }
+    if (p.kind === "slip") { beep("bad"); return show("bad", "That's a packing slip", "", "Packing slips are scanned at loading, not here."); }
+    if (p.kind !== "factory") {
+      beep("bad");
+      var raw = p.raw.length > 70 ? p.raw.slice(0, 70) + "…" : p.raw;
+      return show("bad", "Not a factory label", "", "The scanner read: " + raw + "  –  if that looks scrambled, the scanner's keyboard setting is wrong. Tell the office.");
+    }
+    for (var i = log.items.length - 1; i >= 0; i--) {
+      if (log.items[i].label === p.label) {
+        beep("warn");
+        return show("warn", "Already scanned", p.label, "Scanned at " + hhmm(log.items[i].at) + " today. It only counts once – nothing was sent.");
+      }
+    }
+    var item = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), label: p.label, at: new Date().toISOString(), status: "queued" };
+    log.items.push(item);
+    queue.push({ id: item.id, label: item.label, at: item.at });
+    persist(); render(); pump();
+    beep("ok");
+    show("ok", "✓ IN PRODUCTION", p.label, "Cutting started. Keep this label with the piece.");
+  }
+
+  var lastText = "", lastAt = 0;
+  function seen(text) {
+    var now = Date.now(), key = String(text).trim().toUpperCase();
+    if (key === lastText && now - lastAt < SAME_CODE_IGNORE_MS) { lastAt = now; return; } // still under the scanner
+    lastText = key; lastAt = now;
+    handle(text);
+  }
+
+  // ---------- USB / Bluetooth scanner: it types the QR text like a keyboard, then Enter ----------
+  var kb = "", kbAt = 0, kbTimer = null;
+  document.addEventListener("keydown", function (e) {
+    if (e.ctrlKey || e.altKey || e.metaKey) return; // leave browser shortcuts alone
+    if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault(); // never "click" a focused button or move focus
+      clearTimeout(kbTimer);
+      if (kb.length > 4) seen(kb);
+      kb = ""; return;
+    }
+    if (e.key.length !== 1) return;
+    e.preventDefault(); // no page scroll on space, no quick-find
+    var now = Date.now();
+    if (now - kbAt > 300) kb = "";
+    kb += e.key; kbAt = now;
+    clearTimeout(kbTimer);
+    kbTimer = setTimeout(function () { if (kb.length > 12) seen(kb); kb = ""; }, 250); // scanners set to send no Enter
+  });
+
+  // ---------- "Click here to scan" when another window has the keyboard ----------
+  function paintFocus() { $("nofocus").hidden = document.hasFocus(); }
+  window.addEventListener("focus", paintFocus);
+  window.addEventListener("blur", function () { setTimeout(paintFocus, 50); });
+  setInterval(paintFocus, 1000);
+  $("nofocus").addEventListener("click", function () { window.focus(); $("nofocus").hidden = true; });
+
+  // ---------- clock, screen, full screen ----------
+  function tickClock() { $("clock").textContent = hhmm(new Date().toISOString()); }
+  setInterval(tickClock, 15000); tickClock();
+  function keepAwake() {
+    try { if ("wakeLock" in navigator && !document.hidden) navigator.wakeLock.request("screen").catch(function () {}); } catch (e) {}
+  }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) { keepAwake(); pump(); } });
+  $("fullBtn").onclick = function () {
+    try { var el = document.documentElement; (el.requestFullscreen || el.webkitRequestFullscreen).call(el); } catch (e) {}
+    this.blur();
+  };
+
+  window.__handle = handle; // used by tests
+  keepAwake(); render(); ready(); paintFocus(); pump();
+})();
+</script>
+</body>
+</html>
